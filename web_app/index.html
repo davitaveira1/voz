@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de LED por Voz - ESP32</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        .config-section {
+            margin-bottom: 25px;
+        }
+
+        .config-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .config-section input::placeholder {
+            color: #888;
+        }
+
+        .config-section input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.5);
+        }
+
+        .led-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+        }
+
+        .led-bulb {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3rem;
+        }
+
+        .led-bulb.on {
+            background: #ffd700;
+            box-shadow: 0 0 60px #ffd700, 0 0 100px #ffa500;
+        }
+
+        .status-text {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+
+        .status-text span {
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+
+        .status-text span.on {
+            color: #51cf66;
+        }
+
+        .voice-btn {
+            width: 100%;
+            padding: 20px;
+            border: none;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .voice-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .voice-btn:active {
+            transform: translateY(0);
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            50% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
+        }
+
+        .voice-btn .icon {
+            font-size: 1.5rem;
+        }
+
+        .transcript {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            min-height: 60px;
+        }
+
+        .transcript-label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .transcript-text {
+            font-size: 1rem;
+            color: #fff;
+            font-style: italic;
+        }
+
+        .manual-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .manual-btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .manual-btn.on {
+            background: #51cf66;
+            color: white;
+        }
+
+        .manual-btn.off {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .manual-btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .log-label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .log-entry {
+            font-size: 0.85rem;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry.success {
+            color: #51cf66;
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.info {
+            color: #74c0fc;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .connection-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff6b6b;
+        }
+
+        .connection-dot.connected {
+            background: #51cf66;
+        }
+
+        .commands-help {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            font-size: 0.85rem;
+        }
+
+        .commands-help h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #a0a0a0;
+        }
+
+        .commands-help ul {
+            list-style: none;
+            color: #ccc;
+        }
+
+        .commands-help li {
+            padding: 3px 0;
+        }
+
+        .commands-help li::before {
+            content: "🎤 ";
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Controle de LED por Voz</h1>
+        <p class="subtitle">Conecte seu ESP32 e controle o LED com comandos de voz</p>
+
+        <div class="config-section">
+            <label for="esp32ip">Endereço IP do ESP32:</label>
+            <input type="text" id="esp32ip" placeholder="Ex: 192.168.1.100" value="">
+        </div>
+
+        <div class="connection-status">
+            <div class="connection-dot" id="connectionDot"></div>
+            <span id="connectionText">Desconectado</span>
+        </div>
+
+        <div class="led-display">
+            <div class="led-bulb" id="ledBulb">💡</div>
+        </div>
+
+        <p class="status-text">Status do LED: <span id="ledStatus">DESLIGADO</span></p>
+
+        <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceRecognition()">
+            <span class="icon">🎤</span>
+            <span id="voiceBtnText">Iniciar Reconhecimento de Voz</span>
+        </button>
+
+        <div class="manual-controls">
+            <button class="manual-btn on" onclick="sendCommand('ligar')">💡 Ligar</button>
+            <button class="manual-btn off" onclick="sendCommand('desligar')">🔌 Desligar</button>
+        </div>
+
+        <div class="transcript">
+            <p class="transcript-label">Último comando reconhecido:</p>
+            <p class="transcript-text" id="transcript">-</p>
+        </div>
+
+        <div class="commands-help">
+            <h3>Comandos disponíveis:</h3>
+            <ul>
+                <li>"Ligar LED" ou "Ligar luz" ou "Acender"</li>
+                <li>"Desligar LED" ou "Desligar luz" ou "Apagar"</li>
+            </ul>
+        </div>
+
+        <div class="log">
+            <p class="log-label">Log de atividades:</p>
+            <div id="logContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let recognition = null;
+        let isListening = false;
+        let ledState = false;
+
+        // Elementos DOM
+        const esp32ipInput = document.getElementById('esp32ip');
+        const connectionDot = document.getElementById('connectionDot');
+        const connectionText = document.getElementById('connectionText');
+        const ledBulb = document.getElementById('ledBulb');
+        const ledStatus = document.getElementById('ledStatus');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const voiceBtnText = document.getElementById('voiceBtnText');
+        const transcript = document.getElementById('transcript');
+        const logContainer = document.getElementById('logContainer');
+
+        // Carregar IP salvo
+        const savedIP = localStorage.getItem('esp32ip');
+        if (savedIP) {
+            esp32ipInput.value = savedIP;
+        }
+
+        // Salvar IP quando alterado
+        esp32ipInput.addEventListener('change', () => {
+            localStorage.setItem('esp32ip', esp32ipInput.value);
+            addLog('IP do ESP32 atualizado: ' + esp32ipInput.value, 'info');
+            checkConnection();
+        });
+
+        // Verificar suporte ao reconhecimento de voz
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            addLog('Seu navegador não suporta reconhecimento de voz. Use o Chrome!', 'error');
+            voiceBtn.disabled = true;
+            voiceBtnText.textContent = 'Navegador não suportado';
+        } else {
+            // Inicializar reconhecimento de voz
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    if (result.isFinal) {
+                        finalTranscript += result[0].transcript;
+                    } else {
+                        interimTranscript += result[0].transcript;
+                    }
+                }
+
+                // Mostrar transcrição
+                if (finalTranscript) {
+                    transcript.textContent = finalTranscript;
+                    processVoiceCommand(finalTranscript.toLowerCase());
+                } else if (interimTranscript) {
+                    transcript.textContent = interimTranscript + '...';
+                }
+            };
+
+            recognition.onerror = (event) => {
+                addLog('Erro no reconhecimento: ' + event.error, 'error');
+                if (event.error === 'not-allowed') {
+                    addLog('Permissão de microfone negada!', 'error');
+                }
+            };
+
+            recognition.onend = () => {
+                if (isListening) {
+                    // Reiniciar automaticamente
+                    recognition.start();
+                }
+            };
+        }
+
+        function toggleVoiceRecognition() {
+            if (!recognition) return;
+
+            if (isListening) {
+                recognition.stop();
+                isListening = false;
+                voiceBtn.classList.remove('listening');
+                voiceBtnText.textContent = 'Iniciar Reconhecimento de Voz';
+                addLog('Reconhecimento de voz parado', 'info');
+            } else {
+                recognition.start();
+                isListening = true;
+                voiceBtn.classList.add('listening');
+                voiceBtnText.textContent = 'Ouvindo... (Clique para parar)';
+                addLog('Reconhecimento de voz iniciado', 'info');
+            }
+        }
+
+        function processVoiceCommand(text) {
+            addLog('Comando recebido: "' + text + '"', 'info');
+
+            // Comandos para ligar
+            if (text.includes('ligar') || text.includes('acender') || 
+                text.includes('liga') || text.includes('acende') ||
+                text.includes('ligar led') || text.includes('ligar luz')) {
+                sendCommand('ligar');
+            }
+            // Comandos para desligar
+            else if (text.includes('desligar') || text.includes('apagar') || 
+                     text.includes('desliga') || text.includes('apaga') ||
+                     text.includes('desligar led') || text.includes('desligar luz')) {
+                sendCommand('desligar');
+            }
+            else {
+                addLog('Comando não reconhecido', 'error');
+            }
+        }
+
+        async function sendCommand(command) {
+            const ip = esp32ipInput.value.trim();
+            
+            if (!ip) {
+                addLog('Por favor, insira o IP do ESP32!', 'error');
+                return;
+            }
+
+            const url = `http://${ip}/${command}`;
+            addLog('Enviando comando: ' + command, 'info');
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.led === 'on') {
+                        updateLedState(true);
+                        addLog('✓ LED ligado com sucesso!', 'success');
+                    } else {
+                        updateLedState(false);
+                        addLog('✓ LED desligado com sucesso!', 'success');
+                    }
+                    
+                    updateConnectionStatus(true);
+                } else {
+                    addLog('Erro na resposta: ' + response.status, 'error');
+                    updateConnectionStatus(false);
+                }
+            } catch (error) {
+                addLog('Erro de conexão: ' + error.message, 'error');
+                updateConnectionStatus(false);
+            }
+        }
+
+        function updateLedState(state) {
+            ledState = state;
+            
+            if (state) {
+                ledBulb.classList.add('on');
+                ledStatus.textContent = 'LIGADO';
+                ledStatus.classList.add('on');
+            } else {
+                ledBulb.classList.remove('on');
+                ledStatus.textContent = 'DESLIGADO';
+                ledStatus.classList.remove('on');
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                connectionDot.classList.add('connected');
+                connectionText.textContent = 'Conectado ao ESP32';
+            } else {
+                connectionDot.classList.remove('connected');
+                connectionText.textContent = 'Desconectado';
+            }
+        }
+
+        async function checkConnection() {
+            const ip = esp32ipInput.value.trim();
+            if (!ip) return;
+
+            try {
+                const response = await fetch(`http://${ip}/estado`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateConnectionStatus(true);
+                    updateLedState(data.led === 'on');
+                    addLog('Conectado ao ESP32!', 'success');
+                } else {
+                    updateConnectionStatus(false);
+                }
+            } catch (error) {
+                updateConnectionStatus(false);
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            
+            const time = new Date().toLocaleTimeString('pt-BR');
+            entry.textContent = `[${time}] ${message}`;
+            
+            logContainer.insertBefore(entry, logContainer.firstChild);
+            
+            // Manter apenas os últimos 20 logs
+            while (logContainer.children.length > 20) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+
+        // Verificar conexão inicial
+        if (esp32ipInput.value) {
+            setTimeout(checkConnection, 1000);
+        }
+
+        // Verificar conexão periodicamente
+        setInterval(() => {
+            if (esp32ipInput.value) {
+                checkConnection();
+            }
+        }, 10000);
+
+        addLog('Aplicação iniciada. Configure o IP do ESP32.', 'info');
+    </script>
+</body>
+</html>
