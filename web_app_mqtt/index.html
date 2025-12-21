@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de LED por Voz - MQTT</title>
+    <!-- Biblioteca MQTT.js para WebSocket -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        .cloud-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #00c853, #00e676);
+            color: #000;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .connection-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            transition: all 0.3s ease;
+        }
+
+        .connection-dot.connected {
+            background: #51cf66;
+            box-shadow: 0 0 10px #51cf66;
+        }
+
+        .connection-dot.connecting {
+            background: #ffd43b;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .led-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+        }
+
+        .led-bulb {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3rem;
+        }
+
+        .led-bulb.on {
+            background: #ffd700;
+            box-shadow: 0 0 60px #ffd700, 0 0 100px #ffa500;
+        }
+
+        .status-text {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #ccc;
+        }
+
+        .status-text span {
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+
+        .status-text span.on {
+            color: #51cf66;
+        }
+
+        .voice-btn {
+            width: 100%;
+            padding: 20px;
+            border: none;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .voice-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .voice-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            50% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
+        }
+
+        .voice-btn .icon {
+            font-size: 1.5rem;
+        }
+
+        .transcript {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            min-height: 60px;
+        }
+
+        .transcript-label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .transcript-text {
+            font-size: 1rem;
+            color: #fff;
+            font-style: italic;
+        }
+
+        .manual-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .manual-btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .manual-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .manual-btn.on {
+            background: #51cf66;
+            color: white;
+        }
+
+        .manual-btn.off {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .manual-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .log-label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .log-entry {
+            font-size: 0.85rem;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry.success {
+            color: #51cf66;
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.info {
+            color: #74c0fc;
+        }
+
+        .commands-help {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            font-size: 0.85rem;
+        }
+
+        .commands-help h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #a0a0a0;
+        }
+
+        .commands-help ul {
+            list-style: none;
+            color: #ccc;
+        }
+
+        .commands-help li {
+            padding: 3px 0;
+        }
+
+        .commands-help li::before {
+            content: "🎤 ";
+        }
+
+        .mqtt-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0, 200, 83, 0.1);
+            border: 1px solid rgba(0, 200, 83, 0.3);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #a0a0a0;
+        }
+
+        .mqtt-info code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #74c0fc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Controle de LED por Voz <span class="cloud-badge">☁️ MQTT</span></h1>
+        <p class="subtitle">Controle seu ESP32 de qualquer lugar do mundo!</p>
+
+        <div class="connection-status">
+            <div class="connection-dot" id="connectionDot"></div>
+            <span id="connectionText">Conectando ao broker MQTT...</span>
+        </div>
+
+        <div class="led-display">
+            <div class="led-bulb" id="ledBulb">💡</div>
+        </div>
+
+        <p class="status-text">Status do LED: <span id="ledStatus">DESLIGADO</span></p>
+
+        <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceRecognition()" disabled>
+            <span class="icon">🎤</span>
+            <span id="voiceBtnText">Conectando...</span>
+        </button>
+
+        <div class="manual-controls">
+            <button class="manual-btn on" id="btnLigar" onclick="sendCommand('ligar')" disabled>💡 Ligar</button>
+            <button class="manual-btn off" id="btnDesligar" onclick="sendCommand('desligar')" disabled>🔌 Desligar</button>
+        </div>
+
+        <div class="transcript">
+            <p class="transcript-label">Último comando reconhecido:</p>
+            <p class="transcript-text" id="transcript">-</p>
+        </div>
+
+        <div class="commands-help">
+            <h3>Comandos disponíveis:</h3>
+            <ul>
+                <li>"Ligar LED" ou "Ligar luz" ou "Acender"</li>
+                <li>"Desligar LED" ou "Desligar luz" ou "Apagar"</li>
+            </ul>
+        </div>
+
+        <div class="mqtt-info">
+            <strong>📡 Conexão MQTT:</strong><br>
+            Broker: <code>broker.hivemq.com</code><br>
+            Tópico: <code>labmaker/led/comando</code>
+        </div>
+
+        <div class="log">
+            <p class="log-label">Log de atividades:</p>
+            <div id="logContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============ CONFIGURAÇÃO MQTT ============
+        // IMPORTANTE: Use os mesmos tópicos do ESP32!
+        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';  // WebSocket Secure
+        const MQTT_TOPIC_COMANDO = 'labmaker/led/comando';
+        const MQTT_TOPIC_ESTADO = 'labmaker/led/estado';
+        
+        // Gera um ID único para este cliente web
+        const CLIENT_ID = 'WebApp_' + Math.random().toString(16).substr(2, 8);
+        // ==========================================
+
+        // Variáveis globais
+        let mqttClient = null;
+        let recognition = null;
+        let isListening = false;
+        let ledState = false;
+        let isConnected = false;
+
+        // Elementos DOM
+        const connectionDot = document.getElementById('connectionDot');
+        const connectionText = document.getElementById('connectionText');
+        const ledBulb = document.getElementById('ledBulb');
+        const ledStatus = document.getElementById('ledStatus');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const voiceBtnText = document.getElementById('voiceBtnText');
+        const transcript = document.getElementById('transcript');
+        const logContainer = document.getElementById('logContainer');
+        const btnLigar = document.getElementById('btnLigar');
+        const btnDesligar = document.getElementById('btnDesligar');
+
+        // ============ INICIALIZAÇÃO ============
+        
+        window.onload = function() {
+            addLog('Iniciando aplicação...', 'info');
+            connectMQTT();
+            initVoiceRecognition();
+        };
+
+        // ============ CONEXÃO MQTT ============
+
+        function connectMQTT() {
+            addLog('Conectando ao broker MQTT...', 'info');
+            updateConnectionStatus('connecting');
+
+            const options = {
+                clientId: CLIENT_ID,
+                clean: true,
+                reconnectPeriod: 5000,
+                connectTimeout: 30000,
+            };
+
+            mqttClient = mqtt.connect(MQTT_BROKER, options);
+
+            mqttClient.on('connect', function() {
+                isConnected = true;
+                addLog('✓ Conectado ao broker MQTT!', 'success');
+                updateConnectionStatus('connected');
+                enableControls(true);
+
+                // Inscreve-se no tópico de estado
+                mqttClient.subscribe(MQTT_TOPIC_ESTADO, function(err) {
+                    if (!err) {
+                        addLog('Inscrito no tópico de estado', 'info');
+                    }
+                });
+
+                // Solicita estado atual
+                mqttClient.publish(MQTT_TOPIC_COMANDO, 'estado');
+            });
+
+            mqttClient.on('message', function(topic, message) {
+                const msg = message.toString();
+                console.log('Mensagem recebida:', topic, msg);
+
+                if (topic === MQTT_TOPIC_ESTADO) {
+                    if (msg === 'on') {
+                        updateLedState(true);
+                    } else if (msg === 'off') {
+                        updateLedState(false);
+                    }
+                }
+            });
+
+            mqttClient.on('error', function(error) {
+                addLog('Erro MQTT: ' + error.message, 'error');
+                updateConnectionStatus('disconnected');
+            });
+
+            mqttClient.on('close', function() {
+                isConnected = false;
+                addLog('Conexão MQTT fechada', 'error');
+                updateConnectionStatus('disconnected');
+                enableControls(false);
+            });
+
+            mqttClient.on('reconnect', function() {
+                addLog('Tentando reconectar...', 'info');
+                updateConnectionStatus('connecting');
+            });
+        }
+
+        function updateConnectionStatus(status) {
+            connectionDot.className = 'connection-dot';
+            
+            switch(status) {
+                case 'connected':
+                    connectionDot.classList.add('connected');
+                    connectionText.textContent = 'Conectado ao broker MQTT';
+                    break;
+                case 'connecting':
+                    connectionDot.classList.add('connecting');
+                    connectionText.textContent = 'Conectando...';
+                    break;
+                default:
+                    connectionText.textContent = 'Desconectado';
+            }
+        }
+
+        function enableControls(enabled) {
+            voiceBtn.disabled = !enabled;
+            btnLigar.disabled = !enabled;
+            btnDesligar.disabled = !enabled;
+            
+            if (enabled) {
+                voiceBtnText.textContent = 'Iniciar Reconhecimento de Voz';
+            } else {
+                voiceBtnText.textContent = 'Aguardando conexão...';
+            }
+        }
+
+        // ============ COMANDOS ============
+
+        function sendCommand(command) {
+            if (!isConnected) {
+                addLog('Erro: Não conectado ao broker!', 'error');
+                return;
+            }
+
+            addLog('Enviando comando: ' + command, 'info');
+            mqttClient.publish(MQTT_TOPIC_COMANDO, command);
+        }
+
+        function updateLedState(state) {
+            ledState = state;
+            
+            if (state) {
+                ledBulb.classList.add('on');
+                ledStatus.textContent = 'LIGADO';
+                ledStatus.classList.add('on');
+                addLog('💡 LED está LIGADO', 'success');
+            } else {
+                ledBulb.classList.remove('on');
+                ledStatus.textContent = 'DESLIGADO';
+                ledStatus.classList.remove('on');
+                addLog('🔌 LED está DESLIGADO', 'info');
+            }
+        }
+
+        // ============ RECONHECIMENTO DE VOZ ============
+
+        function initVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                addLog('Navegador não suporta reconhecimento de voz!', 'error');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    if (result.isFinal) {
+                        finalTranscript += result[0].transcript;
+                    } else {
+                        interimTranscript += result[0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    transcript.textContent = finalTranscript;
+                    processVoiceCommand(finalTranscript.toLowerCase());
+                } else if (interimTranscript) {
+                    transcript.textContent = interimTranscript + '...';
+                }
+            };
+
+            recognition.onerror = function(event) {
+                addLog('Erro no reconhecimento: ' + event.error, 'error');
+            };
+
+            recognition.onend = function() {
+                if (isListening) {
+                    recognition.start();
+                }
+            };
+
+            addLog('Reconhecimento de voz inicializado', 'info');
+        }
+
+        function toggleVoiceRecognition() {
+            if (!recognition) return;
+
+            if (isListening) {
+                recognition.stop();
+                isListening = false;
+                voiceBtn.classList.remove('listening');
+                voiceBtnText.textContent = 'Iniciar Reconhecimento de Voz';
+                addLog('Reconhecimento de voz parado', 'info');
+            } else {
+                recognition.start();
+                isListening = true;
+                voiceBtn.classList.add('listening');
+                voiceBtnText.textContent = 'Ouvindo... (Clique para parar)';
+                addLog('🎤 Reconhecimento de voz iniciado', 'info');
+            }
+        }
+
+        function processVoiceCommand(text) {
+            addLog('Comando recebido: "' + text + '"', 'info');
+
+            // Comandos para ligar
+            if (text.includes('ligar') || text.includes('acender') || 
+                text.includes('liga') || text.includes('acende') ||
+                text.includes('ligar led') || text.includes('ligar luz')) {
+                sendCommand('ligar');
+            }
+            // Comandos para desligar
+            else if (text.includes('desligar') || text.includes('apagar') || 
+                     text.includes('desliga') || text.includes('apaga') ||
+                     text.includes('desligar led') || text.includes('desligar luz')) {
+                sendCommand('desligar');
+            }
+            else {
+                addLog('Comando não reconhecido', 'error');
+            }
+        }
+
+        // ============ LOG ============
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            
+            const time = new Date().toLocaleTimeString('pt-BR');
+            entry.textContent = `[${time}] ${message}`;
+            
+            logContainer.insertBefore(entry, logContainer.firstChild);
+            
+            while (logContainer.children.length > 20) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+    </script>
+</body>
+</html>

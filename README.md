@@ -1,16 +1,29 @@
 # 🎙️ Controle de LED por Comando de Voz com ESP32
 
-Sistema completo para controlar um LED usando comandos de voz através de uma aplicação web que se comunica com o ESP32 via WiFi.
+Sistema completo para controlar um LED usando comandos de voz através de uma aplicação web que se comunica com o ESP32 via **MQTT na nuvem**!
+
+🌍 **Controle seu LED de qualquer lugar do mundo!**
 
 ## 📁 Estrutura do Projeto
 
 ```
-├── esp32_led_control/
-│   └── esp32_led_control.ino    # Código do ESP32
-├── web_app/
-│   └── index.html               # Aplicação web com reconhecimento de voz
-└── README.md                    # Este arquivo
+├── esp32_led_mqtt/              # 🆕 VERSÃO MQTT (Recomendada)
+│   └── esp32_led_mqtt.ino       # Código ESP32 com MQTT
+├── web_app_mqtt/                # 🆕 VERSÃO MQTT (Recomendada)
+│   └── index.html               # Aplicação web com MQTT
+├── esp32_led_control/           # Versão HTTP (apenas rede local)
+│   └── esp32_led_control.ino    
+├── web_app/                     # Versão HTTP (apenas rede local)
+│   └── index.html               
+└── README.md                    
 ```
+
+## 🚀 Qual versão usar?
+
+| Versão | Quando usar |
+|--------|-------------|
+| **MQTT** (Recomendada) | Controlar de qualquer lugar (internet) |
+| HTTP | Apenas na mesma rede local |
 
 ## 🔧 Requisitos
 
@@ -21,12 +34,20 @@ Sistema completo para controlar um LED usando comandos de voz através de uma ap
 
 ### Software
 - Arduino IDE (com suporte ao ESP32)
+- **Biblioteca PubSubClient** (para MQTT)
 - Navegador Google Chrome (para reconhecimento de voz)
-- Computador e ESP32 na mesma rede WiFi
 
-## 📦 Instalação
+---
 
-### 1. Configurar o ESP32
+## 📦 Instalação - Versão MQTT (Recomendada)
+
+### 1. Instalar a Biblioteca PubSubClient
+
+1. Na Arduino IDE, vá em `Sketch > Incluir Biblioteca > Gerenciar Bibliotecas`
+2. Pesquise por **"PubSubClient"**
+3. Instale a biblioteca de **Nick O'Leary**
+
+### 2. Configurar o ESP32
 
 1. **Instale o suporte ao ESP32 na Arduino IDE:**
    - Vá em `Arquivo > Preferências`
@@ -37,7 +58,7 @@ Sistema completo para controlar um LED usando comandos de voz através de uma ap
    - Vá em `Ferramentas > Placa > Gerenciador de Placas`
    - Procure por "esp32" e instale
 
-2. **Abra o arquivo `esp32_led_control/esp32_led_control.ino`**
+2. **Abra o arquivo `esp32_led_mqtt/esp32_led_mqtt.ino`**
 
 3. **Configure suas credenciais WiFi:**
    ```cpp
@@ -50,13 +71,13 @@ Sistema completo para controlar um LED usando comandos de voz através de uma ap
 
 5. **Faça o upload do código para o ESP32**
 
-6. **Abra o Monitor Serial (115200 baud)** para ver o IP do ESP32
+6. **Abra o Monitor Serial (115200 baud)** para ver se conectou ao MQTT
 
-### 2. Usar a Aplicação Web
+### 3. Usar a Aplicação Web
 
-1. **Abra o arquivo `web_app/index.html`** no Google Chrome
+1. **Acesse:** https://voz-nine.vercel.app (ou publique `web_app_mqtt/index.html`)
 
-2. **Digite o IP do ESP32** mostrado no Monitor Serial
+2. **Aguarde conectar** ao broker MQTT (indicador verde)
 
 3. **Clique em "Iniciar Reconhecimento de Voz"**
 
@@ -71,27 +92,22 @@ Sistema completo para controlar um LED usando comandos de voz através de uma ap
 | "Acender" | "Apagar" |
 | "Liga" | "Desliga" |
 
-## 🌐 API do ESP32
+## 📡 Como funciona o MQTT
 
-O ESP32 expõe as seguintes rotas HTTP:
-
-| Rota | Método | Descrição |
-|------|--------|-----------|
-| `/` | GET | Página inicial com status |
-| `/ligar` | GET | Liga o LED |
-| `/desligar` | GET | Desliga o LED |
-| `/estado` | GET | Retorna o estado atual do LED |
-| `/toggle` | GET | Inverte o estado do LED |
-
-### Exemplo de Resposta JSON
-
-```json
-{
-  "status": "success",
-  "led": "on",
-  "message": "LED ligado com sucesso!"
-}
 ```
+┌─────────────┐       ┌──────────────────┐       ┌─────────────┐
+│  Aplicação  │──────>│  Broker MQTT     │<──────│   ESP32     │
+│    Web      │       │  (HiveMQ Cloud)  │       │   + LED     │
+│  (Vercel)   │<──────│  broker.hivemq   │──────>│             │
+└─────────────┘       └──────────────────┘       └─────────────┘
+     🎤 Voz              ☁️ Nuvem                  💡 LED
+```
+
+### Tópicos MQTT utilizados:
+| Tópico | Direção | Descrição |
+|--------|---------|-----------|
+| `labmaker/led/comando` | Web → ESP32 | Envia comandos (ligar/desligar) |
+| `labmaker/led/estado` | ESP32 → Web | Retorna estado atual (on/off) |
 
 ## 🔌 Esquema de Conexão (LED Externo)
 
@@ -111,21 +127,22 @@ const int LED_PIN = 2;  // Altere para o GPIO desejado
 ### O reconhecimento de voz não funciona
 - Use o navegador **Google Chrome**
 - Permita o acesso ao microfone quando solicitado
-- Verifique se está usando HTTPS ou localhost
+- Verifique se está usando **HTTPS** (Vercel já usa)
 
-### Não consigo conectar ao ESP32
-- Verifique se o ESP32 está na mesma rede WiFi
-- Confirme o IP no Monitor Serial
-- Desative temporariamente o firewall para teste
-
-### CORS Error
-- O código do ESP32 já inclui headers CORS
-- Se ainda houver problemas, tente abrir o HTML diretamente pelo Chrome
+### ESP32 não conecta ao MQTT
+- Verifique se o WiFi está correto
+- Verifique no Monitor Serial se conectou ao broker
+- O broker `broker.hivemq.com` é gratuito e público
 
 ### LED não acende
 - Verifique se está usando o GPIO correto
 - Teste com o LED embutido (GPIO2) primeiro
 - Verifique a polaridade do LED externo
+
+### Aplicação web não conecta
+- Aguarde alguns segundos para conectar ao broker
+- Verifique se o indicador ficou verde
+- Tente recarregar a página
 
 ## 📱 Acesso pelo Celular
 
