@@ -1,13 +1,14 @@
 /*
- * Controle de LED por Comando de Voz via MQTT
- * ESP32 - Cliente MQTT para receber comandos da nuvem
+ * Dashboard IoT - Controle por Voz via MQTT
+ * ESP32 + LED + Sensor DHT11 (Temperatura e Umidade)
  * 
  * Este código conecta o ESP32 a um broker MQTT na nuvem (HiveMQ)
- * permitindo controle do LED de qualquer lugar do mundo!
+ * permitindo controle e monitoramento de qualquer lugar do mundo!
  */
 
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <DHT.h>
 
 // ============ CONFIGURAÇÕES WiFi - ALTERE AQUI ============
 const char* ssid = "Lidia_2G";              // Nome da sua rede WiFi
@@ -17,38 +18,55 @@ const char* password = "vfn4i83123";         // Senha da sua rede WiFi
 // ============ CONFIGURAÇÕES MQTT - HiveMQ (Gratuito) ============
 const char* mqtt_server = "broker.hivemq.com";  // Broker público gratuito
 const int mqtt_port = 1883;
-const char* mqtt_topic_comando = "labmaker/led/comando";   // Tópico para receber comandos
-const char* mqtt_topic_estado = "labmaker/led/estado";     // Tópico para enviar estado
-const char* mqtt_client_id = "ESP32_LabMaker_001";         // ID único do dispositivo
 
-// IMPORTANTE: Para um projeto real, use um ID único! 
-// Você pode mudar "labmaker" para algo único seu, ex: "davitaveira/led/comando"
+// Tópicos MQTT
+const char* mqtt_topic_comando = "labmaker/led/comando";       // Comandos do LED
+const char* mqtt_topic_led_estado = "labmaker/led/estado";     // Estado do LED
+const char* mqtt_topic_temperatura = "labmaker/sensor/temperatura";  // Temperatura
+const char* mqtt_topic_umidade = "labmaker/sensor/umidade";    // Umidade
+const char* mqtt_topic_sensores = "labmaker/sensor/dados";     // Dados combinados (JSON)
+
+const char* mqtt_client_id = "ESP32_LabMaker_001";             // ID único do dispositivo
 // ================================================================
 
-// Pino do LED (LED embutido do ESP32 ou LED externo)
-const int LED_PIN = 2;  // GPIO2 é o LED embutido na maioria dos ESP32
+// ============ CONFIGURAÇÕES DOS PINOS ============
+const int LED_PIN = 2;      // GPIO2 - LED embutido
+const int DHT_PIN = 4;      // GPIO4 - Sensor DHT11
+// =================================================
+
+// Configuração do DHT11
+#define DHT_TYPE DHT11
+DHT dht(DHT_PIN, DHT_TYPE);
 
 // Objetos WiFi e MQTT
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-// Variável para armazenar o estado do LED
+// Variáveis de estado
 bool ledState = false;
+float temperatura = 0;
+float umidade = 0;
 
-// Variáveis para reconexão
+// Variáveis para temporização
 unsigned long lastReconnectAttempt = 0;
+unsigned long lastSensorRead = 0;
 const long reconnectInterval = 5000;
+const long sensorInterval = 5000;  // Ler sensor a cada 5 segundos
 
 void setup() {
   // Inicializa a comunicação serial
   Serial.begin(115200);
   Serial.println("\n\n========================================");
-  Serial.println("  Controle de LED por Voz via MQTT");
+  Serial.println("  Dashboard IoT - ESP32 + LED + DHT11");
   Serial.println("========================================\n");
   
   // Configura o pino do LED como saída
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  
+  // Inicializa o sensor DHT11
+  dht.begin();
+  Serial.println("✓ Sensor DHT11 inicializado (GPIO4)");
   
   // Conecta ao WiFi
   connectToWiFi();
@@ -59,6 +77,9 @@ void setup() {
   
   // Conecta ao broker MQTT
   connectToMQTT();
+  
+  // Primeira leitura do sensor
+  readSensor();
   
   Serial.println("\n>>> Sistema pronto! Aguardando comandos... <<<\n");
 }
@@ -76,6 +97,13 @@ void loop() {
   
   // Processa mensagens MQTT
   mqttClient.loop();
+  
+  // Lê o sensor periodicamente
+  unsigned long now = millis();
+  if (now - lastSensorRead > sensorInterval) {
+    lastSensorRead = now;
+    readSensor();
+  }
 }
 
 // ============ FUNÇÕES DE CONEXÃO ============
@@ -119,8 +147,11 @@ void connectToMQTT() {
     Serial.print("Inscrito no tópico: ");
     Serial.println(mqtt_topic_comando);
     
-    // Publica estado atual
-    publishState();
+    // Publica estado atual do LED
+    publishLedState();
+    
+    // Publica dados do sensor
+    publishSensorData();
     
   } else {
     Serial.print("✗ Falha na conexão MQTT. Código: ");
@@ -161,7 +192,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
   else if (message == "estado" || message == "status") {
-    publishState();
+    publishLedState();
+    publishSensorData();
   }
   else {
     Serial.println("Comando não reconhecido!");
@@ -174,19 +206,72 @@ void ligarLED() {
   digitalWrite(LED_PIN, HIGH);
   ledState = true;
   Serial.println(">>> LED LIGADO <<<");
-  publishState();
+  publishLedState();
 }
 
 void desligarLED() {
   digitalWrite(LED_PIN, LOW);
   ledState = false;
   Serial.println(">>> LED DESLIGADO <<<");
-  publishState();
+  publishLedState();
 }
 
-void publishState() {
+void publishLedState() {
   String state = ledState ? "on" : "off";
-  mqttClient.publish(mqtt_topic_estado, state.c_str(), true);  // retained = true
-  Serial.print("Estado publicado: ");
+  mqttClient.publish(mqtt_topic_led_estado, state.c_str(), true);  // retained = true
+  Serial.print("Estado do LED publicado: ");
   Serial.println(state);
+}
+
+// ============ FUNÇÕES DO SENSOR DHT11 ============
+
+void readSensor() {
+  // Lê temperatura e umidade
+  float newTemp = dht.readTemperature();
+  float newHum = dht.readHumidity();
+  
+  // Verifica se a leitura é válida
+  if (isnan(newTemp) || isnan(newHum)) {
+    Serial.println("✗ Erro ao ler o sensor DHT11!");
+    return;
+  }
+  
+  temperatura = newTemp;
+  umidade = newHum;
+  
+  // Mostra no Monitor Serial
+  Serial.println("\n----- Leitura do Sensor -----");
+  Serial.print("🌡️  Temperatura: ");
+  Serial.print(temperatura);
+  Serial.println(" °C");
+  Serial.print("💧 Umidade: ");
+  Serial.print(umidade);
+  Serial.println(" %");
+  Serial.println("-----------------------------");
+  
+  // Publica via MQTT
+  publishSensorData();
+}
+
+void publishSensorData() {
+  if (mqttClient.connected()) {
+    // Publica temperatura
+    char tempStr[10];
+    dtostrf(temperatura, 4, 1, tempStr);
+    mqttClient.publish(mqtt_topic_temperatura, tempStr, true);
+    
+    // Publica umidade
+    char humStr[10];
+    dtostrf(umidade, 4, 1, humStr);
+    mqttClient.publish(mqtt_topic_umidade, humStr, true);
+    
+    // Publica dados combinados em JSON
+    char jsonBuffer[100];
+    snprintf(jsonBuffer, sizeof(jsonBuffer), 
+             "{\"temperatura\":%.1f,\"umidade\":%.1f,\"led\":\"%s\"}", 
+             temperatura, umidade, ledState ? "on" : "off");
+    mqttClient.publish(mqtt_topic_sensores, jsonBuffer, true);
+    
+    Serial.println("✓ Dados do sensor publicados via MQTT");
+  }
 }

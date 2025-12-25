@@ -3,50 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de LED por Voz - MQTT</title>
-    <!-- Biblioteca MQTT.js para WebSocket -->
+    <title>Dashboard IoT - ESP32</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             color: white;
             padding: 20px;
         }
 
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 1.8rem;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #a0a0a0;
-            margin-bottom: 30px;
-            font-size: 0.9rem;
-        }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 2rem; margin-bottom: 5px; }
+        .header .subtitle { color: #a0a0a0; font-size: 0.9rem; }
 
         .cloud-badge {
             display: inline-block;
@@ -59,14 +31,17 @@
             margin-left: 5px;
         }
 
-        .connection-status {
+        .dashboard { max-width: 900px; margin: 0 auto; }
+
+        .connection-bar {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-            padding: 12px 15px;
-            background: rgba(0, 0, 0, 0.2);
+            justify-content: center;
+            gap: 10px;
+            padding: 12px 20px;
+            background: rgba(0, 0, 0, 0.3);
             border-radius: 10px;
+            margin-bottom: 25px;
         }
 
         .connection-dot {
@@ -92,16 +67,42 @@
             50% { opacity: 0.3; }
         }
 
-        .led-display {
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon { font-size: 1.5rem; }
+        .card-title { font-size: 1.1rem; font-weight: 600; }
+
+        /* Card do LED */
+        .led-card .led-display {
             display: flex;
             justify-content: center;
-            align-items: center;
-            margin: 30px 0;
+            margin: 20px 0;
         }
 
         .led-bulb {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             background: #333;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
@@ -109,38 +110,66 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 3rem;
+            font-size: 2.5rem;
         }
 
         .led-bulb.on {
             background: #ffd700;
-            box-shadow: 0 0 60px #ffd700, 0 0 100px #ffa500;
+            box-shadow: 0 0 50px #ffd700, 0 0 80px #ffa500;
         }
 
-        .status-text {
+        .led-status {
             text-align: center;
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            color: #ccc;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
         }
 
-        .status-text span {
+        .led-status span { font-weight: bold; color: #ff6b6b; }
+        .led-status span.on { color: #51cf66; }
+
+        .led-controls { display: flex; gap: 10px; }
+
+        .led-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .led-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .led-btn.on { background: #51cf66; color: white; }
+        .led-btn.off { background: #ff6b6b; color: white; }
+        .led-btn:hover:not(:disabled) { transform: translateY(-2px); }
+
+        /* Cards dos Sensores */
+        .sensor-value { text-align: center; padding: 20px 0; }
+
+        .sensor-number {
+            font-size: 3rem;
             font-weight: bold;
-            color: #ff6b6b;
+            line-height: 1;
         }
 
-        .status-text span.on {
-            color: #51cf66;
-        }
+        .sensor-unit { font-size: 1.5rem; color: #a0a0a0; }
+        .sensor-label { font-size: 0.9rem; color: #888; margin-top: 10px; }
+        .temp-card .sensor-number { color: #ff7675; }
+        .humidity-card .sensor-number { color: #74b9ff; }
+
+        /* Card de Voz */
+        .voice-card { grid-column: 1 / -1; }
 
         .voice-btn {
             width: 100%;
-            padding: 20px;
+            padding: 18px;
             border: none;
             border-radius: 15px;
             background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
             color: white;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -155,10 +184,7 @@
             box-shadow: 0 5px 20px rgba(74, 144, 226, 0.4);
         }
 
-        .voice-btn:disabled {
-            background: #555;
-            cursor: not-allowed;
-        }
+        .voice-btn:disabled { background: #555; cursor: not-allowed; }
 
         .voice-btn.listening {
             background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
@@ -170,137 +196,60 @@
             50% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
         }
 
-        .voice-btn .icon {
-            font-size: 1.5rem;
-        }
-
         .transcript {
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 15px;
+            padding: 12px;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 10px;
-            min-height: 60px;
         }
 
-        .transcript-label {
-            font-size: 0.8rem;
-            color: #888;
-            margin-bottom: 5px;
-        }
+        .transcript-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .transcript-text { font-size: 1rem; color: #fff; font-style: italic; }
 
-        .transcript-text {
-            font-size: 1rem;
-            color: #fff;
-            font-style: italic;
-        }
-
-        .manual-controls {
+        .commands-list {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
         }
 
-        .manual-btn {
-            flex: 1;
-            padding: 15px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .manual-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .manual-btn.on {
-            background: #51cf66;
-            color: white;
-        }
-
-        .manual-btn.off {
-            background: #ff6b6b;
-            color: white;
-        }
-
-        .manual-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
-
-        .log {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .log-label {
+        .command-tag {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
             font-size: 0.8rem;
-            color: #888;
-            margin-bottom: 10px;
-        }
-
-        .log-entry {
-            font-size: 0.85rem;
-            padding: 5px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-
-        .log-entry.success {
-            color: #51cf66;
-        }
-
-        .log-entry.error {
-            color: #ff6b6b;
-        }
-
-        .log-entry.info {
-            color: #74c0fc;
-        }
-
-        .commands-help {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            font-size: 0.85rem;
-        }
-
-        .commands-help h3 {
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-            color: #a0a0a0;
-        }
-
-        .commands-help ul {
-            list-style: none;
             color: #ccc;
         }
 
-        .commands-help li {
-            padding: 3px 0;
-        }
+        /* Log */
+        .log-card { grid-column: 1 / -1; }
 
-        .commands-help li::before {
-            content: "🎤 ";
-        }
-
-        .mqtt-info {
-            margin-top: 15px;
+        .log-container {
+            max-height: 120px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
             padding: 10px;
+        }
+
+        .log-entry {
+            font-size: 0.8rem;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+        .log-entry.success { color: #51cf66; }
+        .log-entry.error { color: #ff6b6b; }
+        .log-entry.info { color: #74c0fc; }
+
+        /* Info MQTT */
+        .mqtt-info {
+            text-align: center;
+            padding: 15px;
             background: rgba(0, 200, 83, 0.1);
-            border: 1px solid rgba(0, 200, 83, 0.3);
-            border-radius: 8px;
+            border: 1px solid rgba(0, 200, 83, 0.2);
+            border-radius: 10px;
             font-size: 0.75rem;
             color: #a0a0a0;
         }
@@ -311,69 +260,119 @@
             border-radius: 4px;
             color: #74c0fc;
         }
+
+        @media (max-width: 600px) {
+            .header h1 { font-size: 1.5rem; }
+            .sensor-number { font-size: 2.5rem; }
+            .cards-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎙️ Controle de LED por Voz <span class="cloud-badge">☁️ MQTT</span></h1>
-        <p class="subtitle">Controle seu ESP32 de qualquer lugar do mundo!</p>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🏠 Dashboard IoT <span class="cloud-badge">☁️ MQTT</span></h1>
+            <p class="subtitle">Monitoramento e controle em tempo real</p>
+        </div>
 
-        <div class="connection-status">
+        <div class="connection-bar">
             <div class="connection-dot" id="connectionDot"></div>
             <span id="connectionText">Conectando ao broker MQTT...</span>
         </div>
 
-        <div class="led-display">
-            <div class="led-bulb" id="ledBulb">💡</div>
-        </div>
+        <div class="cards-grid">
+            <!-- Card LED -->
+            <div class="card led-card">
+                <div class="card-header">
+                    <span class="card-icon">💡</span>
+                    <span class="card-title">Controle do LED</span>
+                </div>
+                <div class="led-display">
+                    <div class="led-bulb" id="ledBulb">💡</div>
+                </div>
+                <p class="led-status">Status: <span id="ledStatus">DESLIGADO</span></p>
+                <div class="led-controls">
+                    <button class="led-btn on" id="btnLigar" onclick="sendCommand('ligar')" disabled>Ligar</button>
+                    <button class="led-btn off" id="btnDesligar" onclick="sendCommand('desligar')" disabled>Desligar</button>
+                </div>
+            </div>
 
-        <p class="status-text">Status do LED: <span id="ledStatus">DESLIGADO</span></p>
+            <!-- Card Temperatura -->
+            <div class="card temp-card">
+                <div class="card-header">
+                    <span class="card-icon">🌡️</span>
+                    <span class="card-title">Temperatura</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="sensor-number" id="tempValue">--</span>
+                    <span class="sensor-unit">°C</span>
+                    <p class="sensor-label">Sensor DHT11</p>
+                </div>
+            </div>
 
-        <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceRecognition()" disabled>
-            <span class="icon">🎤</span>
-            <span id="voiceBtnText">Conectando...</span>
-        </button>
+            <!-- Card Umidade -->
+            <div class="card humidity-card">
+                <div class="card-header">
+                    <span class="card-icon">💧</span>
+                    <span class="card-title">Umidade</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="sensor-number" id="humidityValue">--</span>
+                    <span class="sensor-unit">%</span>
+                    <p class="sensor-label">Sensor DHT11</p>
+                </div>
+            </div>
 
-        <div class="manual-controls">
-            <button class="manual-btn on" id="btnLigar" onclick="sendCommand('ligar')" disabled>💡 Ligar</button>
-            <button class="manual-btn off" id="btnDesligar" onclick="sendCommand('desligar')" disabled>🔌 Desligar</button>
-        </div>
+            <!-- Card Controle por Voz -->
+            <div class="card voice-card">
+                <div class="card-header">
+                    <span class="card-icon">🎤</span>
+                    <span class="card-title">Controle por Voz</span>
+                </div>
+                <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceRecognition()" disabled>
+                    <span>🎤</span>
+                    <span id="voiceBtnText">Conectando...</span>
+                </button>
+                <div class="transcript">
+                    <p class="transcript-label">Último comando:</p>
+                    <p class="transcript-text" id="transcript">-</p>
+                </div>
+                <div class="commands-list">
+                    <span class="command-tag">🎤 "Ligar LED"</span>
+                    <span class="command-tag">🎤 "Desligar LED"</span>
+                    <span class="command-tag">🎤 "Acender"</span>
+                    <span class="command-tag">🎤 "Apagar"</span>
+                </div>
+            </div>
 
-        <div class="transcript">
-            <p class="transcript-label">Último comando reconhecido:</p>
-            <p class="transcript-text" id="transcript">-</p>
-        </div>
-
-        <div class="commands-help">
-            <h3>Comandos disponíveis:</h3>
-            <ul>
-                <li>"Ligar LED" ou "Ligar luz" ou "Acender"</li>
-                <li>"Desligar LED" ou "Desligar luz" ou "Apagar"</li>
-            </ul>
+            <!-- Card Log -->
+            <div class="card log-card">
+                <div class="card-header">
+                    <span class="card-icon">📋</span>
+                    <span class="card-title">Log de Atividades</span>
+                </div>
+                <div class="log-container" id="logContainer"></div>
+            </div>
         </div>
 
         <div class="mqtt-info">
-            <strong>📡 Conexão MQTT:</strong><br>
-            Broker: <code>broker.hivemq.com</code><br>
-            Tópico: <code>labmaker/led/comando</code>
-        </div>
-
-        <div class="log">
-            <p class="log-label">Log de atividades:</p>
-            <div id="logContainer"></div>
+            <strong>📡 Conexão MQTT:</strong> 
+            Broker: <code>broker.hivemq.com</code> | 
+            Tópicos: <code>labmaker/led/*</code> e <code>labmaker/sensor/*</code>
         </div>
     </div>
 
     <script>
         // ============ CONFIGURAÇÃO MQTT ============
-        // IMPORTANTE: Use os mesmos tópicos do ESP32!
-        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';  // WebSocket Secure
-        const MQTT_TOPIC_COMANDO = 'labmaker/led/comando';
-        const MQTT_TOPIC_ESTADO = 'labmaker/led/estado';
-        
-        // Gera um ID único para este cliente web
+        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+        const MQTT_TOPICS = {
+            comando: 'labmaker/led/comando',
+            ledEstado: 'labmaker/led/estado',
+            temperatura: 'labmaker/sensor/temperatura',
+            umidade: 'labmaker/sensor/umidade',
+            sensores: 'labmaker/sensor/dados'
+        };
         const CLIENT_ID = 'WebApp_' + Math.random().toString(16).substr(2, 8);
-        // ==========================================
 
         // Variáveis globais
         let mqttClient = null;
@@ -387,6 +386,8 @@
         const connectionText = document.getElementById('connectionText');
         const ledBulb = document.getElementById('ledBulb');
         const ledStatus = document.getElementById('ledStatus');
+        const tempValue = document.getElementById('tempValue');
+        const humidityValue = document.getElementById('humidityValue');
         const voiceBtn = document.getElementById('voiceBtn');
         const voiceBtnText = document.getElementById('voiceBtnText');
         const transcript = document.getElementById('transcript');
@@ -395,27 +396,23 @@
         const btnDesligar = document.getElementById('btnDesligar');
 
         // ============ INICIALIZAÇÃO ============
-        
         window.onload = function() {
-            addLog('Iniciando aplicação...', 'info');
+            addLog('Iniciando Dashboard IoT...', 'info');
             connectMQTT();
             initVoiceRecognition();
         };
 
         // ============ CONEXÃO MQTT ============
-
         function connectMQTT() {
             addLog('Conectando ao broker MQTT...', 'info');
             updateConnectionStatus('connecting');
 
-            const options = {
+            mqttClient = mqtt.connect(MQTT_BROKER, {
                 clientId: CLIENT_ID,
                 clean: true,
                 reconnectPeriod: 5000,
                 connectTimeout: 30000,
-            };
-
-            mqttClient = mqtt.connect(MQTT_BROKER, options);
+            });
 
             mqttClient.on('connect', function() {
                 isConnected = true;
@@ -423,27 +420,35 @@
                 updateConnectionStatus('connected');
                 enableControls(true);
 
-                // Inscreve-se no tópico de estado
-                mqttClient.subscribe(MQTT_TOPIC_ESTADO, function(err) {
-                    if (!err) {
-                        addLog('Inscrito no tópico de estado', 'info');
-                    }
-                });
-
-                // Solicita estado atual
-                mqttClient.publish(MQTT_TOPIC_COMANDO, 'estado');
+                // Inscreve-se nos tópicos
+                mqttClient.subscribe(MQTT_TOPICS.ledEstado);
+                mqttClient.subscribe(MQTT_TOPICS.temperatura);
+                mqttClient.subscribe(MQTT_TOPICS.umidade);
+                mqttClient.subscribe(MQTT_TOPICS.sensores);
+                
+                addLog('Inscrito nos tópicos do ESP32', 'info');
+                mqttClient.publish(MQTT_TOPICS.comando, 'estado');
             });
 
             mqttClient.on('message', function(topic, message) {
                 const msg = message.toString();
-                console.log('Mensagem recebida:', topic, msg);
 
-                if (topic === MQTT_TOPIC_ESTADO) {
-                    if (msg === 'on') {
-                        updateLedState(true);
-                    } else if (msg === 'off') {
-                        updateLedState(false);
-                    }
+                if (topic === MQTT_TOPICS.ledEstado) {
+                    updateLedState(msg === 'on');
+                }
+                else if (topic === MQTT_TOPICS.temperatura) {
+                    updateTemperature(parseFloat(msg));
+                }
+                else if (topic === MQTT_TOPICS.umidade) {
+                    updateHumidity(parseFloat(msg));
+                }
+                else if (topic === MQTT_TOPICS.sensores) {
+                    try {
+                        const data = JSON.parse(msg);
+                        if (data.temperatura) updateTemperature(data.temperatura);
+                        if (data.umidade) updateHumidity(data.umidade);
+                        if (data.led) updateLedState(data.led === 'on');
+                    } catch (e) {}
                 }
             });
 
@@ -467,7 +472,6 @@
 
         function updateConnectionStatus(status) {
             connectionDot.className = 'connection-dot';
-            
             switch(status) {
                 case 'connected':
                     connectionDot.classList.add('connected');
@@ -486,44 +490,45 @@
             voiceBtn.disabled = !enabled;
             btnLigar.disabled = !enabled;
             btnDesligar.disabled = !enabled;
-            
-            if (enabled) {
-                voiceBtnText.textContent = 'Iniciar Reconhecimento de Voz';
-            } else {
-                voiceBtnText.textContent = 'Aguardando conexão...';
-            }
+            voiceBtnText.textContent = enabled ? 'Iniciar Reconhecimento de Voz' : 'Aguardando conexão...';
         }
 
-        // ============ COMANDOS ============
-
+        // ============ ATUALIZAÇÕES DA UI ============
         function sendCommand(command) {
             if (!isConnected) {
-                addLog('Erro: Não conectado ao broker!', 'error');
+                addLog('Erro: Não conectado!', 'error');
                 return;
             }
-
-            addLog('Enviando comando: ' + command, 'info');
-            mqttClient.publish(MQTT_TOPIC_COMANDO, command);
+            addLog('Enviando: ' + command, 'info');
+            mqttClient.publish(MQTT_TOPICS.comando, command);
         }
 
         function updateLedState(state) {
             ledState = state;
-            
             if (state) {
                 ledBulb.classList.add('on');
                 ledStatus.textContent = 'LIGADO';
                 ledStatus.classList.add('on');
-                addLog('💡 LED está LIGADO', 'success');
             } else {
                 ledBulb.classList.remove('on');
                 ledStatus.textContent = 'DESLIGADO';
                 ledStatus.classList.remove('on');
-                addLog('🔌 LED está DESLIGADO', 'info');
+            }
+        }
+
+        function updateTemperature(temp) {
+            if (!isNaN(temp)) {
+                tempValue.textContent = temp.toFixed(1);
+            }
+        }
+
+        function updateHumidity(hum) {
+            if (!isNaN(hum)) {
+                humidityValue.textContent = hum.toFixed(1);
             }
         }
 
         // ============ RECONHECIMENTO DE VOZ ============
-
         function initVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 addLog('Navegador não suporta reconhecimento de voz!', 'error');
@@ -562,12 +567,10 @@
             };
 
             recognition.onend = function() {
-                if (isListening) {
-                    recognition.start();
-                }
+                if (isListening) recognition.start();
             };
 
-            addLog('Reconhecimento de voz inicializado', 'info');
+            addLog('Reconhecimento de voz pronto', 'info');
         }
 
         function toggleVoiceRecognition() {
@@ -578,29 +581,25 @@
                 isListening = false;
                 voiceBtn.classList.remove('listening');
                 voiceBtnText.textContent = 'Iniciar Reconhecimento de Voz';
-                addLog('Reconhecimento de voz parado', 'info');
+                addLog('🎤 Reconhecimento parado', 'info');
             } else {
                 recognition.start();
                 isListening = true;
                 voiceBtn.classList.add('listening');
                 voiceBtnText.textContent = 'Ouvindo... (Clique para parar)';
-                addLog('🎤 Reconhecimento de voz iniciado', 'info');
+                addLog('🎤 Ouvindo comandos...', 'info');
             }
         }
 
         function processVoiceCommand(text) {
-            addLog('Comando recebido: "' + text + '"', 'info');
+            addLog('Comando: "' + text + '"', 'info');
 
-            // Comandos para ligar
             if (text.includes('ligar') || text.includes('acender') || 
-                text.includes('liga') || text.includes('acende') ||
-                text.includes('ligar led') || text.includes('ligar luz')) {
+                text.includes('liga') || text.includes('acende')) {
                 sendCommand('ligar');
             }
-            // Comandos para desligar
             else if (text.includes('desligar') || text.includes('apagar') || 
-                     text.includes('desliga') || text.includes('apaga') ||
-                     text.includes('desligar led') || text.includes('desligar luz')) {
+                     text.includes('desliga') || text.includes('apaga')) {
                 sendCommand('desligar');
             }
             else {
@@ -609,17 +608,13 @@
         }
 
         // ============ LOG ============
-
         function addLog(message, type = 'info') {
             const entry = document.createElement('div');
             entry.className = 'log-entry ' + type;
-            
             const time = new Date().toLocaleTimeString('pt-BR');
-            entry.textContent = `[${time}] ${message}`;
-            
+            entry.textContent = '[' + time + '] ' + message;
             logContainer.insertBefore(entry, logContainer.firstChild);
-            
-            while (logContainer.children.length > 20) {
+            while (logContainer.children.length > 15) {
                 logContainer.removeChild(logContainer.lastChild);
             }
         }
